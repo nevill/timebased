@@ -1,0 +1,9 @@
+*.so
+*.dylib
+*.test
+*.out
+/.vscode
+/main
+/.idea
+gin-bin
+system.html
