@@ -9,9 +9,6 @@ import (
 	"time"
 )
 
-//TODO
-// 1. add variable to set if round to minute to start
-
 type Store interface {
 	collect() ([]Element, error)
 	start()
