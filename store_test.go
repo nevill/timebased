@@ -15,14 +15,20 @@ func TestMemStore(t *testing.T) {
 
 	s.ingest(c1)
 
-	if ctr := s.collect(); len(ctr) > 0 {
-		t.Fatalf("Expect to get an empty counter, but got: %v\n", ctr)
+	if elems, _ := s.collect(); len(elems) > 0 {
+		t.Fatalf("Expect to get an empty list, but got: %v\n", elems)
 	}
 
 	s.rotate()
 
-	if ctr := s.collect(); ctr["p3"] != 7 {
-		t.Fatalf("Expect to get 7, but got: %d\n", ctr["p3"])
+	if elems, _ := s.collect(); len(elems) == 0 {
+		t.Fatalf("Expect to get an array of elements, but got: %v\n", elems)
+	} else {
+		for i := range elems {
+			if elems[i].Key == "p3" && elems[i].Count != 7 {
+				t.Fatalf("Expect to get 7, but got: %d\n", elems[i].Count)
+			}
+		}
 	}
 
 	c2 := counter{
@@ -34,7 +40,13 @@ func TestMemStore(t *testing.T) {
 
 	s.rotate()
 
-	if ctr := s.collect(); ctr["p2"] != 16 {
-		t.Fatalf("Expect to get 16, but got: %d\n", ctr["p2"])
+	if elems, _ := s.collect(); len(elems) == 0 {
+		t.Fatalf("Expect to get an array of elements, but got: %v\n", elems)
+	} else {
+		for i := range elems {
+			if elems[i].Key == "p2" && elems[i].Count != 16 {
+				t.Fatalf("Expect to get 16, but got: %d\n", elems[i].Count)
+			}
+		}
 	}
 }

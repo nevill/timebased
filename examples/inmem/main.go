@@ -18,7 +18,12 @@ func main() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			log.Printf("%v\n", tbCounter.Report())
+			time.Sleep(time.Second * 3)
+			elems, err := tbCounter.Report()
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Printf("%v\n", elems)
 		}
 	}()
 
