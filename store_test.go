@@ -1,13 +1,17 @@
 package timebased
 
 import (
+	"github.com/gomodule/redigo/redis"
 	"testing"
 	"time"
 )
 
 func TestMemStore(t *testing.T) {
 	s := NewMemStore(time.Second, 3)
+	testWithStore(s, t)
+}
 
+func testWithStore(s Store, t *testing.T) {
 	c1 := counter{
 		"p2": 5,
 		"p3": 7,
@@ -49,4 +53,13 @@ func TestMemStore(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestRedisStore(t *testing.T) {
+	conn, err := redis.Dial("tcp", ":6379")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := NewRedisStore(time.Minute, 3, "testing", conn)
+	testWithStore(s, t)
 }

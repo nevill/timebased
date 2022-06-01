@@ -1,7 +1,6 @@
 package timebased
 
 import (
-	"container/list"
 	"container/ring"
 	"fmt"
 	"github.com/gomodule/redigo/redis"
@@ -12,8 +11,10 @@ import (
 type Store interface {
 	collect() ([]Element, error)
 	start()
-	store(ctr counter)
+	store(counter)
 	sorted() bool
+	ingest(counter)
+	rotate()
 }
 
 type Element struct {
@@ -21,12 +22,11 @@ type Element struct {
 	Count uint64
 }
 
-// MemStore maintains a list of counter, every interval passes,
-// the oldest (header) counter will be removed, and append a new one at the end of the list.
+// MemStore maintains a list of counter, when an interval passes, it rotates.
+// The oldest (pointed by current) will be cleared and start a new counting process.
 type MemStore struct {
-	capacity     int
 	interval     time.Duration
-	list         *list.List
+	list         *ring.Ring
 	current      counter
 	mutex        *sync.Mutex
 	inputChannel chan counter
@@ -34,16 +34,20 @@ type MemStore struct {
 }
 
 func NewMemStore(interval time.Duration, cap int) *MemStore {
+	list := ring.New(cap + 1)
+	for l, i := list, 0; i <= cap; i++ {
+		l.Value = counter{}
+		l = l.Next()
+	}
 	s := &MemStore{
-		capacity:     cap + 1, // add one more element for the counter which is still counting
 		interval:     interval,
-		list:         list.New(),
+		list:         list,
 		current:      counter{},
 		mutex:        &sync.Mutex{},
 		inputChannel: make(chan counter),
 		stopChannel:  make(chan interface{}),
 	}
-	s.list.PushBack(s.current)
+	s.list.Value = s.current
 	return s
 }
 
@@ -68,12 +72,9 @@ func (s *MemStore) ingest(ctr counter) {
 func (s *MemStore) rotate() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	if s.list.Len() >= s.capacity {
-		e := s.list.Front()
-		s.list.Remove(e)
-	}
+	s.list = s.list.Next()
 	s.current = counter{}
-	s.list.PushBack(s.current)
+	s.list.Value = s.current
 }
 
 func (s *MemStore) start() {
@@ -104,9 +105,9 @@ func (s *MemStore) store(ctr counter) {
 func (s *MemStore) collect() ([]Element, error) {
 	total := counter{}
 	s.mutex.Lock()
-	// don't count the last element
-	for e := s.list.Front(); e != nil && e.Next() != nil; e = e.Next() {
-		for k, change := range e.Value.(counter) {
+	// don't count current in use
+	for it := s.list.Next(); it != s.list; it = it.Next() {
+		for k, change := range it.Value.(counter) {
 			if val, ok := total[k]; ok {
 				total[k] = val + change
 			} else {
@@ -125,7 +126,6 @@ func (s *MemStore) collect() ([]Element, error) {
 const keyPrefix = "timebased:store:%s"
 
 type RedisStore struct {
-	capacity     int
 	interval     time.Duration
 	current      string
 	list         *ring.Ring
@@ -144,7 +144,6 @@ func NewRedisStore(interval time.Duration, cap int, name string, conn redis.Conn
 		l = l.Next()
 	}
 	return &RedisStore{
-		capacity:     cap,
 		interval:     interval,
 		current:      "0",
 		list:         list,
